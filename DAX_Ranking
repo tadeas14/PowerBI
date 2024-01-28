@@ -1,0 +1,151 @@
+[Ranking ALL] = 
+	IF (
+		NOT( ISBLANK( [AVG Ranking] ) ) && HASONEVALUE( 'Brand Scores'[Brand] ), -- works for selected brand with ranking
+		RANKX(
+			FILTER(
+				ALL( 'Brand Scores'[Brand], 'Brand Scores'[Industry], 'Brand Scores'[Industry Sub Sector], 'Brand Scores'[Global Sub Sector] ), -- overrides filters on these columns
+				NOT( ISBLANK( [AVG Ranking] ) ) -- brands without rank are not included in ranking
+			),
+			CALCULATE( [AVG Ranking] ),,
+			ASC -- ascending sorting
+		)
+	)
+
+[Ranking ALLSELECTED] = 
+	IF (
+		NOT( ISBLANK( [AVG Ranking] ) ) && HASONEVALUE( 'Brand Scores'[Brand] ), -- works for selected brand with ranking
+		RANKX(
+			FILTER(
+				ALLSELECTED( 'Brand Scores' ), -- ranking within selection
+				NOT( ISBLANK( [AVG Ranking] ) ) -- brands without rank are not included in ranking
+			),
+			CALCULATE( [AVG Ranking] ),,
+			ASC -- ascending sorting
+		)
+	)
+
+[Ranking Ordinal] = 
+	VAR ranking = [Ranking]
+	VAR Last2Digits = RIGHT( ranking, 2 )
+	VAR LastDigit =	RIGHT( ranking, 1 )
+	VAR Suffix =
+		SWITCH(
+			TRUE(),
+			Last2Digits IN { "11", "12", "13" }, "th",
+			LastDigit = "1", "st",
+			LastDigit = "2", "nd",
+			LastDigit = "3", "rd",
+			"th"
+		)
+	RETURN
+		FORMAT( ranking, "0" & Suffix )
+
+[Industry Ranking ALL] = 
+	VAR selectedIndustry = SELECTEDVALUE( 'Brand Scores'[Industry] )
+	RETURN
+	IF(
+		NOT( ISBLANK( [AVG Ranking] ) ) && HASONEVALUE( 'Brand Scores'[Brand] ), -- works for selected brand with ranking
+        RANKX(
+			FILTER(
+				ALL( 'Brand Scores'[Brand], 'Brand Scores'[Industry], 'Brand Scores'[Industry Sub Sector], 'Brand Scores'[Global Sub Sector] ), -- overrides filters on these columns
+				NOT( ISBLANK( [AVG Ranking] ) ) -- brands without rank are not included in ranking
+			),
+            CALCULATE(
+                [AVG Ranking COALESCE], -- 9999 for brands without rank
+                'Brand Scores'[Industry] = selectedIndustry -- ranks within selected industry
+            ),,
+			ASC -- ascending sorting
+        )
+	)
+
+[Selected Ranking ALLSELECTED Brand] = 
+	VAR selectedRank = SELECTEDVALUE( 'Ranks'[Rank] )
+	VAR selectedBrand =
+		SELECTCOLUMNS( 
+			FILTER(
+				SELECTCOLUMNS(
+					'Brand Scores',
+					"Brand", 'Brand Scores'[Brand], -- can be replaced by other columns (Industry/Color/Icon/...)
+					"Ranking", [Ranking ALLSELECTED]
+				),
+				[Ranking] = selectedRank
+			),
+			[Brand] -- (Industry/Color/Icon/...)
+		)
+	RETURN
+	selectedBrand
+  
+[Selected Ranking ALLSELECTED measure] = 
+	VAR selectedRank = SELECTEDVALUE( 'Ranks'[Rank] )
+	VAR selectedBrand = [Selected Ranking ALLSELECTED Brand]
+	VAR finalResult =
+		SELECTCOLUMNS( 
+			FILTER(
+				SELECTCOLUMNS(
+					'Brand Scores',
+					"Brand", 'Brand Scores'[Brand],
+					"selectedMeasure", [measure]
+				),
+				[Brand] = selectedBrand
+			),
+			[selectedMeasure]
+		)
+	RETURN
+	finalResult
+
+[Selected Ranking ALLSELECTED Change Indicator] = 
+	VAR selectedRank = SELECTEDVALUE( 'Ranks'[Rank] )
+	VAR selectedYear = SELECTEDVALUE( 'Calendar Table'[Year] )
+	VAR PY = selectedYear - 1
+	VAR selectedBrand = [Selected Ranking ALLSELECTED Brand]
+	VAR selectedBrandRankPY =
+		SELECTCOLUMNS( 
+			FILTER(
+				CALCULATETABLE (
+					SELECTCOLUMNS(
+						'Brand Scores',
+						"Brand", 'Brand Scores'[Brand],
+						"Ranking", [Ranking ALLSELECTED]
+					),
+			        'Calendar Table'[Year] = PY
+				),
+				[Brand] = selectedBrand
+			),
+			[Ranking]
+		)
+	RETURN 
+	IF(
+		HASONEVALUE( 'Calendar Table'[Year] ),
+		SWITCH( TRUE(),
+			ISBLANK( selectedBrandRankPY ), "N/A", -- PY Rank not available
+			selectedRank = selectedBrandRankPY, UNICHAR(9473), -- rank remained unchanched
+			selectedRank > selectedBrandRankPY, UNICHAR(9660), -- rank is higher than PY
+			selectedRank < selectedBrandRankPY, UNICHAR(9650) -- rank is lower than PY
+		) -- https://www.vertex42.com/ExcelTips/unicode-symbols.html
+	)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
