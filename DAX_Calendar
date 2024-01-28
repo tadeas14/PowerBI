@@ -1,0 +1,134 @@
+Calendar = 
+VAR currentDate = TODAY ()
+VAR currentMonth = MONTH( TODAY () )
+VAR currentYear = YEAR( TODAY() )
+VAR min_year = 2020 -- lze upravit na variabilni vypocet
+VAR max_year = 2025 -- lze upravit na variabilni vypocet
+RETURN
+
+ADDCOLUMNS (
+	CALENDAR (
+		DATE ( min_year, 1, 1 ),
+		DATE ( max_year, 12, 31 )
+	),
+	"Short Date", FORMAT( [Date], "dd.mm." ),
+	"Year", YEAR( [Date] ),
+	"Quarter", "Q" & QUARTER ( [Date] ),
+	"Month", FORMAT( [Date], "mmmm" ),
+	"Month Number", MONTH( [Date] ),
+	"Month Name Short", FORMAT( [Date], "MMM" ),
+	"Year Month Number", INT( FORMAT ( [Date], "YYYYMM" ) ),
+	"Day", DAY( [Date] ),
+	"Day Name", FORMAT( [Date], "DDDD" ),
+	"Day Name Short", FORMAT( [Date], "DDD" ),
+	"Week Number", WEEKNUM( [Date] , 21), -- to sort
+	"Week Name", "Week " & WEEKNUM( [Date] , 21),
+	"Weekday Number", WEEKDAY( [Date], 2 ),
+	"Year Flag", 
+		SWITCH( TRUE(),
+			currentYear = YEAR( [Date] ), "Current",
+			currentYear = YEAR( [Date] ) + 1, "Previous",
+			currentYear = YEAR( [Date] ) - 1, "Next",
+			currentYear > YEAR( [Date] ) + 1, "Past",
+			"Future"
+		),
+	"Day Flag", 
+		SWITCH( TRUE(),
+			currentDate = [Date], "Today",
+			currentDate > [Date], "Past",
+			"Future"
+		),
+	"Day Flag Detailed", 
+		SWITCH( TRUE(),
+			currentDate = [Date], "Today",
+			currentDate = [Date] + 1, "Yesterday",
+			currentDate = [Date] - 1, "Tomorrow",
+			currentDate > [Date] + 1, "Past",
+			"Future"
+		),
+	"isWorkDay",
+		SWITCH( WEEKDAY( [Date], 2 ),
+			6, FALSE(),
+			7, FALSE(),
+			TRUE()
+		)
+)		
+
+Month Rank = RANKX( ALL( 'Work Calendar' ), [Year Month Number],, ASC, DENSE )
+Month Flag =
+	VAR currentMonthRank = LOOKUPVALUE( 'Date'[Month Rank], 'Date'[Date], TODAY () )
+	VAR rowMonthRank = 'Date'[Month Rank]
+	RETURN
+	SWITCH(
+		TRUE(),
+		CurrentMonthRank = rowMonthRank, "Current",
+		CurrentMonthRank - 1 = rowMonthRank, "Previous",
+		CurrentMonthRank + 1 = rowMonthRank, "Next",
+		CurrentMonthRank - 1 < rowMonthRank, "Future",
+		"Past"
+	)
+
+
+=
+VAR TodayReference = TODAY ()
+VAR MinYear =
+    YEAR (
+        MIN (
+            MIN ( 'Daily Retain'[Retain Date] ),
+            MIN ( 'Daily Timesheet'[Timesheet Record Date] )
+        )
+    ) - 3
+VAR MaxYear =
+    YEAR (
+        MAX (
+            MAX ( 'Daily Retain'[Retain Date] ),
+            MAX ( 'Daily Timesheet'[Timesheet Record Date] )
+        )
+    ) + 2
+VAR FiscalYearStart = 10
+RETURN
+    ADDCOLUMNS (
+        CALENDAR ( DATE ( MinYear, 1, 1 ), DATE ( MaxYear, 12, 31 ) ),
+        "Date CZ Format", FORMAT ( [Date], "dd.mm.yyyy" ),
+        "Calendar Year", YEAR ( [Date] ),
+        "Quarter", FORMAT ( [Date], "\Quarter Q" ),
+        "Fiscal Year",
+            IF (
+                FiscalYearStart = 1,
+                YEAR ( [Date] ),
+                YEAR ( [Date] )
+                    + QUOTIENT ( MONTH ( [Date] ) + ( 13 - FiscalYearStart ), 13 )
+            ),
+        "Calendar Month Number", MONTH ( [Date] ),
+        "Fiscal Month Number",
+            MOD ( MONTH ( [Date] ) + ( 13 - FiscalYearStart ) - 1, 12 ) + 1,
+        -- hide, to sort "Month Name"
+        "Month Name", FORMAT ( [Date], "mmmm"),
+        "Month Name Short", FORMAT ( [Date], "MMM" ),
+        "Year Month Number", INT ( FORMAT ( [Date], "YYYYMM" ) ),
+        -- whole number (not needed?) - to sort
+        "Month Name Year", FORMAT ( [Date], "MMM YYYY" ),
+    --    "Week Number", FORMAT ( [Date], "WW" ), -- to sort
+		"Week Number", WEEKNUM ( [Date] , 21), -- to sort
+    --    "Week Name", FORMAT ( [Date], "\Week WW" ),
+		"Week Name", "Week " & WEEKNUM ( [Date] , 21),
+        "Weekday Number", WEEKDAY ( [Date], 2 ),
+        -- hide, to sort and measures
+        "Day", DAY ( [Date] ),
+        "Day Name", FORMAT ( [Date], "DDDD" ),
+        "Day Name Short", FORMAT ( [Date], "DDD" ),
+        "Period",
+            IF (
+                DAY ( [Date] ) <= 15,
+                INT ( FORMAT ( [Date], "YYYYMM1" ) ),
+                INT ( FORMAT ( [Date], "YYYYMM2" ) )
+            ),
+        "Period Text Format",
+            IF (
+                DAY ( [Date] ) <= 15,
+                FORMAT ( [Date], "YYYY-MM-1" ),
+                FORMAT ( [Date], "YYYY-MM-2" )
+            ),
+        "TS Period Name", IF ( DAY ( [Date] ) <= 15, "1st TS Period", "2nd TS Period" ),
+        "Day Month", FORMAT ( [Date], "dd.mm." )
+    )
